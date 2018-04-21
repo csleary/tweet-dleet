@@ -2,6 +2,9 @@ require 'twitter'
 
 USERNAME = 'ochremusic'
 MAX_TWEET_AGE_MONTHS = 6
+SAFE_TWEETS = [
+  849169274409189376
+]
 
 client = Twitter::REST::Client.new do |config|
   config.consumer_key        = ENV['TWITTER_CONSUMER_KEY']
@@ -13,29 +16,38 @@ end
 max_age_days = Date.today - (Date.today << MAX_TWEET_AGE_MONTHS)
 max_age_secs = max_age_days.to_i * 24 * 60 * 60
 
-id = client.user_timeline(USERNAME).first.id
-timeline = []
-stale_tweets = []
-count = 200
+begin
+  id = client.user_timeline(USERNAME).first.id
+  timeline = []
+  stale_tweets = []
+  count = 200
 
-puts 'Fetching all tweets...'
+  puts 'Fetching all tweets...'
 
-# TODO make array of safe tweet IDs that should be kept (keybase etc.).
+  loop do
+    tweets = client.user_timeline(USERNAME, count: count, max_id: id)
+    tweets.each do |tweet|
+      break if !tweet
 
-loop do
-  tweets = client.user_timeline(USERNAME, count: count, max_id: id)
-  tweets.each do |tw|
-    stale_tweets << tw if tw.created_at < Time.now - max_age_secs == true && !tw.media?
+      if tweet.created_at < Time.now - max_age_secs === true &&
+        !tweet.media? &&
+        SAFE_TWEETS.include?(tweet.id) === false
+
+        stale_tweets << tweet
+      end
+    end
+    timeline.concat tweets
+    id = tweets.last.id
+    break if tweets.count < count
   end
-  timeline.concat tweets
-  id = tweets.last.id
-  break if tweets.count < count
+
+  # Delete stale non-media tweets.
+  # stale_tweets.each do |tw|
+  #   client.destroy_status(tw.id)
+  # end
+
+  puts 'Tweet count:' + timeline.count.to_s
+  puts 'Stale tweets:' + stale_tweets.count.to_s
+rescue => error
+  warn "Error: #{error.message}"
 end
-
-# Delete stale non-media tweets.
-# stale_tweets.each do |tw|
-#   client.destroy_status(tw.id)
-# end
-
-puts 'Tweet count:' + timeline.count.to_s
-puts 'Stale tweets:' + stale_tweets.count.to_s
