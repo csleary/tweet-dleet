@@ -2,6 +2,7 @@ require 'twitter'
 
 USERNAME = 'ochremusic'
 MAX_TWEET_AGE_MONTHS = 6
+DELETE_MEDIA_TWEETS = false
 SAFE_TWEETS = [
   849169274409189376
 ]
@@ -27,15 +28,15 @@ begin
   loop do
     tweets = client.user_timeline(USERNAME, count: count, max_id: id)
     tweets.each do |tweet|
-      break if !tweet
+      break if tweet.nil?
 
-      if tweet.created_at < Time.now - max_age_secs === true &&
-        !tweet.media? &&
-        SAFE_TWEETS.include?(tweet.id) === false
+      next unless tweet.created_at < Time.now - max_age_secs &&
+                  !SAFE_TWEETS.include?(tweet.id) &&
+                  (!tweet.media? || DELETE_MEDIA_TWEETS)
 
-        stale_tweets << tweet
-      end
+      stale_tweets << tweet
     end
+
     timeline.concat tweets
     id = tweets.last.id
     break if tweets.count < count
@@ -48,6 +49,6 @@ begin
 
   puts 'Tweet count:' + timeline.count.to_s
   puts 'Stale tweets:' + stale_tweets.count.to_s
-rescue => error
+rescue StandardError => error
   warn "Error: #{error.message}"
 end
